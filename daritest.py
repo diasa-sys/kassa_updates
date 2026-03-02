@@ -15,7 +15,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.0.9"  # Финальная версия для теста
+CURRENT_VERSION = "1.0.8"  # Финальная версия для теста
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -70,24 +70,21 @@ def check_for_updates():
                     for chunk in r.iter_content(chunk_size=8192):
                         f.write(chunk)
                 
-                logging.info("Файл скачан. Запуск процесса самозамены...")
+                logging.info("Создаю скрипт обновления update.bat...")
                 
-                # Используем твою идею с таймаутом, но добавляем кавычки для надежности
-                cmd_command = (
-                    f"timeout /t 5 /nobreak && "
-                    f"taskkill /f /im daritest.exe /t && "
-                    f"del /f /q \"{current_exe}\" && "
-                    f"move /y \"{new_exe}\" \"{current_exe}\" && "
-                    f"start \"\" \"{current_exe}\""
-                )
-                
-                # НОВЫЙ СПОСОБ ЗАПУСКА: Открывает отдельное скрытое окно для команд
-                subprocess.Popen(
-                    ["cmd.exe", "/c", cmd_command],
-                    creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.DETACHED_PROCESS
-                )
-                
-                os._exit(0)
+                # Создаем вспомогательный файл, который сделает замену
+                with open("update.bat", "w", encoding="cp866") as f:
+                    f.write(f"@echo off\n")
+                    f.write(f"timeout /t 5 /nobreak\n")
+                    f.write(f"taskkill /f /im daritest.exe /t >nul 2>&1\n")
+                    f.write(f"del /f /q \"{current_exe}\"\n")
+                    f.write(f"move /y \"{new_exe}\" \"{current_exe}\"\n")
+                    f.write(f"start \"\" \"{current_exe}\"\n")
+                    f.write(f"del \"%~f0\"\n") # Батник удалит сам себя в конце
+
+                logging.info("Запускаю скрипт и выхожу...")
+                os.startfile("update.bat") # Windows запустит батник отдельно
+                os._exit(0) # Программа СРАЗУ закроется, освободив файл
             else:
                 logging.error(f"Ошибка загрузки: {r.status_code}")
         else:
