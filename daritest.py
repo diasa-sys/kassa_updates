@@ -14,7 +14,8 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.0.7"  # Установили 1.0.6, чтобы выйти из цикла обновлений
+CURRENT_VERSION = "1.0.8"  # Финальная версия для теста
+BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
 TYPE_DELAY = 0.0008
@@ -30,7 +31,6 @@ logging.basicConfig(
 
 app = FastAPI()
 
-# НАСТРОЙКА CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,9 +38,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 2. ФУНКЦИИ ОБНОВЛЕНИЯ (ФИНАЛЬНАЯ ВЕРСИЯ С TASKKILL)
+# 2. ФУНКЦИИ ОБНОВЛЕНИЯ И БЭКАПА
 def check_for_updates():
-    """Обновление самого .exe файла через механизм принудительной замены"""
+    """Проверяет версию, делает бэкап и обновляет EXE"""
     EXE_UPDATE_URL = "https://github.com/diasa-sys/kassa_updates/raw/main/daritest.exe"
     VERSION_URL = "https://raw.githubusercontent.com/diasa-sys/kassa_updates/refs/heads/main/version.txt"
     
@@ -50,21 +50,28 @@ def check_for_updates():
         latest_version = response.text.strip()
         
         if latest_version > CURRENT_VERSION:
-            logging.info(f"Найдена новая версия {latest_version}! Подготовка к обновлению...")
+            logging.info(f"Найдена новая версия {latest_version}! Подготовка...")
             
             current_exe = sys.executable
-            # Используем четкое имя для нового файла, чтобы cmd его нашел
             new_exe = os.path.join(os.path.dirname(current_exe), "daritest_new.exe")
+
+            # СОЗДАНИЕ БЭКАПА ПЕРЕД ОБНОВЛЕНИЕМ
+            if not os.path.exists(BACKUP_DIR):
+                os.makedirs(BACKUP_DIR)
+            backup_path = os.path.join(BACKUP_DIR, f"daritest_v{CURRENT_VERSION}.exe")
+            shutil.copy2(current_exe, backup_path)
+            logging.info(f"Бэкап создан: {backup_path}")
             
+            # СКАЧИВАНИЕ
             r = requests.get(EXE_UPDATE_URL, timeout=30, stream=True)
             if r.status_code == 200:
                 with open(new_exe, "wb") as f:
                     for chunk in r.iter_content(chunk_size=8192):
                         f.write(chunk)
                 
-                logging.info("Файл скачан. Перезапуск для замены...")
+                logging.info("Файл скачан. Запуск процесса самозамены...")
                 
-                # Команда CMD: Ждем 5 сек, убиваем процесс daritest.exe, удаляем старый, ставим новый и запускаем
+                # ФИНАЛЬНАЯ КОМАНДА: Убиваем, удаляем, переименовываем, запускаем
                 cmd_command = (
                     f"timeout /t 5 /nobreak && "
                     f"taskkill /f /im daritest.exe /t && "
@@ -80,9 +87,9 @@ def check_for_updates():
         else:
             logging.info("У вас актуальная версия.")
     except Exception as e:
-        logging.error(f"Обновление прервано: {e}")
+        logging.error(f"Ошибка при обновлении: {e}")
 
-# 3. РАБОЧИЕ ФУНКЦИИ ДЛЯ КАССЫ
+# 3. ЭМУЛЯЦИЯ КЛАВИАТУРЫ
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 
 def _press_vk(vk):
@@ -110,28 +117,21 @@ def find_target_window():
             if TARGET_WINDOW.lower() in (w.window_text() or "").lower(): return w
     except: return None
 
+# 4. API
 @app.post("/scan")
 async def scan(req: Dict[Any, Any]):
     try:
-        if req:
-            payload = json.dumps(req, ensure_ascii=False)
-            logging.info("Печать данных из запроса")
-        else:
-            payload = "{\"doc_id\":\"тест\",\"items\":[]}"
-            logging.warning("Пустой запрос")
-
+        payload = json.dumps(req, ensure_ascii=False) if req else "{\"doc_id\":\"тест\"}"
         win = find_target_window()
-        if not win: return {"status": "error", "message": "Касса не открыта"}
+        if not win: return {"status": "error", "message": "Окно кассы не найдено"}
         
         win.set_focus()
         hard_type(payload)
         return {"status": "ok"}
     except Exception as e:
-        logging.exception("Ошибка в scan")
+        logging.exception("Ошибка в методе scan")
         return {"status": "error", "details": str(e)}
 
-# 4. ЗАПУСК
 if __name__ == "__main__":
-    # Сначала проверяем наличие версии выше 1.0.6 на GitHub
     check_for_updates() 
     uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)
