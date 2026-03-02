@@ -13,7 +13,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.0.1"
+CURRENT_VERSION = "1.0.2"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -109,4 +109,5 @@ async def scan(req: Dict[Any, Any]):
 # 4. ЗАПУСК
 if __name__ == "__main__":
     check_for_updates() # Проверяем обновы ПЕРЕД запуском сервера
+
     uvicorn.run(app, host="127.0.0.1", port=8000)
