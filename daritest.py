@@ -14,8 +14,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.0.4"  # Обновленная версия
-BACKUP_DIR = "backups"
+CURRENT_VERSION = "1.0.6"  # Установили 1.0.6, чтобы выйти из цикла обновлений
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
 TYPE_DELAY = 0.0008
@@ -31,7 +30,7 @@ logging.basicConfig(
 
 app = FastAPI()
 
-# НАСТРОЙКА CORS для интеграции с фронтендом сайта
+# НАСТРОЙКА CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,10 +38,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 2. ФУНКЦИИ ОБНОВЛЕНИЯ (БЕЗОПАСНАЯ ЗАМЕНА EXE)
+# 2. ФУНКЦИИ ОБНОВЛЕНИЯ (ФИНАЛЬНАЯ ВЕРСИЯ С TASKKILL)
 def check_for_updates():
-    """Обновление самого .exe файла через механизм временной замены"""
-    # Ссылка на прямой скачивание EXE из твоего репозитория
+    """Обновление самого .exe файла через механизм принудительной замены"""
     EXE_UPDATE_URL = "https://github.com/diasa-sys/kassa_updates/raw/main/daritest.exe"
     VERSION_URL = "https://raw.githubusercontent.com/diasa-sys/kassa_updates/refs/heads/main/version.txt"
     
@@ -55,9 +53,9 @@ def check_for_updates():
             logging.info(f"Найдена новая версия {latest_version}! Подготовка к обновлению...")
             
             current_exe = sys.executable
+            # Используем четкое имя для нового файла, чтобы cmd его нашел
             new_exe = os.path.join(os.path.dirname(current_exe), "daritest_new.exe")
             
-            # Скачиваем новый бинарник
             r = requests.get(EXE_UPDATE_URL, timeout=30, stream=True)
             if r.status_code == 200:
                 with open(new_exe, "wb") as f:
@@ -66,19 +64,16 @@ def check_for_updates():
                 
                 logging.info("Файл скачан. Перезапуск для замены...")
                 
-                # Скрипт для cmd: подождать 2 сек, удалить старый, переименовать новый, запустить
+                # Команда CMD: Ждем 5 сек, убиваем процесс daritest.exe, удаляем старый, ставим новый и запускаем
                 cmd_command = (
                     f"timeout /t 5 /nobreak && "
                     f"taskkill /f /im daritest.exe /t && "
                     f"del /f /q \"{current_exe}\" && "
-                    f"move \"{new_exe}\" \"{current_exe}\" && "
+                    f"move /y \"{new_exe}\" \"{current_exe}\" && "
                     f"start \"\" \"{current_exe}\""
                 )
                 
-                # Запускаем cmd отдельно от текущего процесса
                 os.spawnl(os.P_NOWAIT, "C:\\Windows\\System32\\cmd.exe", "/c", cmd_command)
-                
-                # Немедленный выход, чтобы разблокировать .exe для удаления
                 os._exit(0)
             else:
                 logging.error(f"Ошибка загрузки: {r.status_code}")
@@ -118,13 +113,12 @@ def find_target_window():
 @app.post("/scan")
 async def scan(req: Dict[Any, Any]):
     try:
-        # Приоритет данным от фронтенда
         if req:
             payload = json.dumps(req, ensure_ascii=False)
             logging.info("Печать данных из запроса")
         else:
             payload = "{\"doc_id\":\"тест\",\"items\":[]}"
-            logging.warning("Пустой запрос, ничего не печатаю")
+            logging.warning("Пустой запрос")
 
         win = find_target_window()
         if not win: return {"status": "error", "message": "Касса не открыта"}
@@ -138,5 +132,6 @@ async def scan(req: Dict[Any, Any]):
 
 # 4. ЗАПУСК
 if __name__ == "__main__":
+    # Сначала проверяем наличие версии выше 1.0.6 на GitHub
     check_for_updates() 
     uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)
