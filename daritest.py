@@ -14,7 +14,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.0.4" 
+CURRENT_VERSION = "1.0.4"  # Обновленная версия
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -31,7 +31,7 @@ logging.basicConfig(
 
 app = FastAPI()
 
-# НАСТРОЙКА CORS: Чтобы сайт мог слать запросы на localhost
+# НАСТРОЙКА CORS для интеграции с фронтендом сайта
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,9 +39,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 2. ФУНКЦИИ ОБНОВЛЕНИЯ (ЗАМЕНА EXE ЧЕРЕЗ CMD)
+# 2. ФУНКЦИИ ОБНОВЛЕНИЯ (БЕЗОПАСНАЯ ЗАМЕНА EXE)
 def check_for_updates():
-    """Проверяет версию и скачивает новый EXE, если он появился"""
+    """Обновление самого .exe файла через механизм временной замены"""
+    # Ссылка на прямой скачивание EXE из твоего репозитория
     EXE_UPDATE_URL = "https://github.com/diasa-sys/kassa_updates/raw/main/daritest.exe"
     VERSION_URL = "https://raw.githubusercontent.com/diasa-sys/kassa_updates/refs/heads/main/version.txt"
     
@@ -51,37 +52,42 @@ def check_for_updates():
         latest_version = response.text.strip()
         
         if latest_version > CURRENT_VERSION:
-            logging.info(f"Найдена новая версия {latest_version}! Скачиваю EXE...")
+            logging.info(f"Найдена новая версия {latest_version}! Подготовка к обновлению...")
             
             current_exe = sys.executable
             new_exe = current_exe + ".new"
             
+            # Скачиваем новый бинарник
             r = requests.get(EXE_UPDATE_URL, timeout=30, stream=True)
             if r.status_code == 200:
                 with open(new_exe, "wb") as f:
                     for chunk in r.iter_content(chunk_size=8192):
                         f.write(chunk)
                 
-                logging.info("Файл скачан. Запуск процесса самозамены...")
+                logging.info("Файл скачан. Перезапуск для замены...")
                 
-                # Команда для CMD: подождать, удалить старый, переименовать новый, запустить снова
+                # Скрипт для cmd: подождать 2 сек, удалить старый, переименовать новый, запустить
                 cmd_command = (
-                    f"timeout /t 2 /nobreak && "
+                    f"timeout /t 5 /nobreak && "
+                    f"taskkill /f /im \"{os.path.basename(current_exe)}\" /t && "
                     f"del /f /q \"{current_exe}\" && "
                     f"move \"{new_exe}\" \"{current_exe}\" && "
                     f"start \"\" \"{current_exe}\""
                 )
                 
+                # Запускаем cmd отдельно от текущего процесса
                 os.spawnl(os.P_NOWAIT, "C:\\Windows\\System32\\cmd.exe", "/c", cmd_command)
+                
+                # Немедленный выход, чтобы разблокировать .exe для удаления
                 os._exit(0)
             else:
-                logging.error(f"Не удалось скачать обновление: {r.status_code}")
+                logging.error(f"Ошибка загрузки: {r.status_code}")
         else:
             logging.info("У вас актуальная версия.")
     except Exception as e:
-        logging.error(f"Ошибка при обновлении: {e}")
+        logging.error(f"Обновление прервано: {e}")
 
-# 3. ЭМУЛЯЦИЯ КЛАВИАТУРЫ
+# 3. РАБОЧИЕ ФУНКЦИИ ДЛЯ КАССЫ
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 
 def _press_vk(vk):
@@ -109,30 +115,28 @@ def find_target_window():
             if TARGET_WINDOW.lower() in (w.window_text() or "").lower(): return w
     except: return None
 
-# 4. API ЭНДПОИНТЫ
 @app.post("/scan")
 async def scan(req: Dict[Any, Any]):
     try:
+        # Приоритет данным от фронтенда
         if req:
             payload = json.dumps(req, ensure_ascii=False)
-            logging.info("Получен JSON от фронтенда")
+            logging.info("Печать данных из запроса")
         else:
-            # Заглушка, если пришел пустой запрос
-            payload = "{\"doc_id\":\"TEST-000\",\"items\":[]}"
-            logging.warning("Пустой запрос. Печатаю тестовый заголовок.")
+            payload = "{\"doc_id\":\"тест\",\"items\":[]}"
+            logging.warning("Пустой запрос, ничего не печатаю")
 
         win = find_target_window()
-        if not win: 
-            return {"status": "error", "message": "Окно кассы не найдено. Откройте программу Касса v2."}
+        if not win: return {"status": "error", "message": "Касса не открыта"}
         
         win.set_focus()
         hard_type(payload)
-        return {"status": "ok", "message": "Данные успешно отправлены в кассу"}
+        return {"status": "ok"}
     except Exception as e:
-        logging.exception("Критическая ошибка в методе scan")
+        logging.exception("Ошибка в scan")
         return {"status": "error", "details": str(e)}
 
-# 5. ТОЧКА ВХОДА
+# 4. ЗАПУСК
 if __name__ == "__main__":
     check_for_updates() 
     uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)
