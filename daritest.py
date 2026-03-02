@@ -7,6 +7,7 @@ import requests
 import time
 import uvicorn
 import ctypes
+import subprocess
 from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,7 +15,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.0.8"  # Финальная версия для теста
+CURRENT_VERSION = "1.0.9"  # Финальная версия для теста
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -71,7 +72,7 @@ def check_for_updates():
                 
                 logging.info("Файл скачан. Запуск процесса самозамены...")
                 
-                # ФИНАЛЬНАЯ КОМАНДА: Убиваем, удаляем, переименовываем, запускаем
+                # Используем твою идею с таймаутом, но добавляем кавычки для надежности
                 cmd_command = (
                     f"timeout /t 5 /nobreak && "
                     f"taskkill /f /im daritest.exe /t && "
@@ -80,7 +81,12 @@ def check_for_updates():
                     f"start \"\" \"{current_exe}\""
                 )
                 
-                os.spawnl(os.P_NOWAIT, "C:\\Windows\\System32\\cmd.exe", "/c", cmd_command)
+                # НОВЫЙ СПОСОБ ЗАПУСКА: Открывает отдельное скрытое окно для команд
+                subprocess.Popen(
+                    ["cmd.exe", "/c", cmd_command],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.DETACHED_PROCESS
+                )
+                
                 os._exit(0)
             else:
                 logging.error(f"Ошибка загрузки: {r.status_code}")
