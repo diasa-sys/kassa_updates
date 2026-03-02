@@ -14,7 +14,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.0.6"  # Установили 1.0.6, чтобы выйти из цикла обновлений
+CURRENT_VERSION = "1.0.7"  # Установили 1.0.6, чтобы выйти из цикла обновлений
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
 TYPE_DELAY = 0.0008
