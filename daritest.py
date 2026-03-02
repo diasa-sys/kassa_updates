@@ -55,7 +55,7 @@ def check_for_updates():
             logging.info(f"Найдена новая версия {latest_version}! Подготовка к обновлению...")
             
             current_exe = sys.executable
-            new_exe = current_exe + ".new"
+            new_exe = os.path.join(os.path.dirname(current_exe), "daritest_new.exe")
             
             # Скачиваем новый бинарник
             r = requests.get(EXE_UPDATE_URL, timeout=30, stream=True)
@@ -69,7 +69,7 @@ def check_for_updates():
                 # Скрипт для cmd: подождать 2 сек, удалить старый, переименовать новый, запустить
                 cmd_command = (
                     f"timeout /t 5 /nobreak && "
-                    f"taskkill /f /im \"{os.path.basename(current_exe)}\" /t && "
+                    f"taskkill /f /im daritest.exe /t && "
                     f"del /f /q \"{current_exe}\" && "
                     f"move \"{new_exe}\" \"{current_exe}\" && "
                     f"start \"\" \"{current_exe}\""
