@@ -1,4 +1,5 @@
 import os
+import json
 import sys
 import shutil
 import logging
@@ -13,7 +14,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.0.2"
+CURRENT_VERSION = "1.0.4"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -29,7 +30,14 @@ logging.basicConfig(
 )
 
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# НАСТРОЙКА CORS: Позволяет вашему сайту отправлять запросы на этот локальный сервер
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Разрешает запросы с любых доменов
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 2. ФУНКЦИИ ОБНОВЛЕНИЯ И БЭКАПА
 def create_backup():
@@ -42,23 +50,32 @@ def create_backup():
     logging.info(f"Бэкап успешно создан: {backup_name}")
 
 def check_for_updates():
-    """Проверяет обновления (пока в тестовом режиме)"""
-    UPDATE_URL = "http://placeholder-url.com/daritest.py"
-    VERSION_URL = "http://placeholder-url.com/version.txt"
+    """Проверка и скачивание обновлений из GitHub"""
+    UPDATE_URL = "https://raw.githubusercontent.com/diasa-sys/kassa_updates/refs/heads/main/daritest.py"
+    VERSION_URL = "https://raw.githubusercontent.com/diasa-sys/kassa_updates/refs/heads/main/version.txt"
+    
     try:
         logging.info(f"--- Проверка обновлений (Версия {CURRENT_VERSION}) ---")
-        # Пока мы просто имитируем, что обновлений нет (latest == current)
-        latest_version = CURRENT_VERSION
+        response = requests.get(VERSION_URL, timeout=5)
+        latest_version = response.text.strip()
+        
         if latest_version > CURRENT_VERSION:
-            logging.info(f"Найдена новая версия {latest_version}!")
+            logging.info(f"Найдена новая версия {latest_version}! Обновляюсь...")
             create_backup()
-            # Тут будет код скачивания, когда появится ссылка
+            r = requests.get(UPDATE_URL, timeout=10)
+            if r.status_code == 200:
+                with open(__file__, "w", encoding="utf-8") as f:
+                    f.write(r.text)
+                logging.info("ОБНОВЛЕНИЕ ЗАВЕРШЕНО. ПЕРЕЗАПУСТИТЕ СКРИПТ.")
+                os._exit(0) 
+            else:
+                logging.error(f"Не удалось скачать код, ошибка: {r.status_code}")
         else:
             logging.info("У вас последняя версия программы.")
     except Exception as e:
-        logging.error(f"Не удалось проверить обновления: {e}")
+        logging.error(f"Ошибка при связи с GitHub: {e}")
 
-# 3. ТВОИ РАБОЧИЕ ФУНКЦИИ ДЛЯ КАССЫ
+# 3. РАБОЧИЕ ФУНКЦИИ ДЛЯ КАССЫ
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 
 def _press_vk(vk):
@@ -81,6 +98,7 @@ def hard_type(text, suffix=TYPE_SUFFIX, delay=TYPE_DELAY):
     if suffix == "\r": _press_vk(0x0D)
 
 def find_target_window():
+    """Поиск окна кассы в системе"""
     try:
         for w in Desktop(backend="uia").windows():
             if TARGET_WINDOW.lower() in (w.window_text() or "").lower(): return w
@@ -88,26 +106,37 @@ def find_target_window():
 
 @app.post("/scan")
 async def scan(req: Dict[Any, Any]):
+    """Основной обработчик запросов на печать"""
     try:
-        # Тот самый фрагмент, который ты правил вручную
-        payload = (
-            "{\"doc_id\":\"228694\",\"items\":["
-            "{\"ware_id\":\"6FC6A660-AA17-4A5B-B732-112A7E580C32\",\"price\":98,\"quantity\":15},"
-            "{\"ware_id\":\"37D2B27D-D2AC-4359-B760-CF250C776D7A\",\"price\":597,\"quantity\":10},"
-            "{\"ware_id\":\"37D2B27D-D2AC-4359-B760-CF250C776D7A\",\"price\":545,\"quantity\":4}"
-            "]}"
-        )
+        # Если данные пришли в POST-запросе от сайта, используем их
+        if req:
+            payload = json.dumps(req, ensure_ascii=False)
+            logging.info("Получены актуальные данные от фронтенда")
+        else:
+            # Резервный тестовый payload
+            payload = (
+                "{\"doc_id\":\"228698\",\"items\":["
+                "{\"ware_id\":\"27DBB2EE-C6E7-4D22-9F3C-7C6B03378CFA\",\"price\":1651,\"quantity\":1},"
+                "{\"ware_id\":\"11475AE2-83AD-4253-80C5-44F9C1E0416E\",\"price\":3512,\"quantity\":1},"
+                "{\"ware_id\":\"25077273-0DB4-4D41-8B9B-AA79EFAAFDC5\",\"price\":2337,\"quantity\":1}"
+                "]}"
+            )
+            logging.info("Данные в запросе отсутствуют, использован тестовый payload")
+
         win = find_target_window()
-        if not win: return {"status": "error", "message": "Окно не найдено"}
+        if not win: 
+            logging.error("Окно кассы не найдено")
+            return {"status": "error", "message": "Окно не найдено"}
+        
         win.set_focus()
         hard_type(payload)
         return {"status": "ok"}
     except Exception as e:
-        logging.exception("Ошибка в scan")
+        logging.exception("Ошибка в функции scan")
         return {"status": "error", "details": str(e)}
 
 # 4. ЗАПУСК
 if __name__ == "__main__":
-    check_for_updates() # Проверяем обновы ПЕРЕД запуском сервера
-
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    check_for_updates() 
+    # Запуск сервера uvicorn без стандартных конфигов логов для корректной работы в фоне
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)
