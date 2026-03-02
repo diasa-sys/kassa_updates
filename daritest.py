@@ -14,7 +14,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.0.4"
+CURRENT_VERSION = "1.0.4" 
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -31,27 +31,18 @@ logging.basicConfig(
 
 app = FastAPI()
 
-# НАСТРОЙКА CORS: Позволяет вашему сайту отправлять запросы на этот локальный сервер
+# НАСТРОЙКА CORS: Чтобы сайт мог слать запросы на localhost
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Разрешает запросы с любых доменов
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 2. ФУНКЦИИ ОБНОВЛЕНИЯ И БЭКАПА
-def create_backup():
-    """Создает резервную копию текущего файла"""
-    if not os.path.exists(BACKUP_DIR):
-        os.makedirs(BACKUP_DIR)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_name = f"{BACKUP_DIR}/daritest_v{CURRENT_VERSION}_{timestamp}.py"
-    shutil.copy(__file__, backup_name)
-    logging.info(f"Бэкап успешно создан: {backup_name}")
-
+# 2. ФУНКЦИИ ОБНОВЛЕНИЯ (ЗАМЕНА EXE ЧЕРЕЗ CMD)
 def check_for_updates():
-    """Проверка и скачивание обновлений из GitHub"""
-    UPDATE_URL = "https://raw.githubusercontent.com/diasa-sys/kassa_updates/refs/heads/main/daritest.py"
+    """Проверяет версию и скачивает новый EXE, если он появился"""
+    EXE_UPDATE_URL = "https://github.com/diasa-sys/kassa_updates/raw/main/daritest.exe"
     VERSION_URL = "https://raw.githubusercontent.com/diasa-sys/kassa_updates/refs/heads/main/version.txt"
     
     try:
@@ -60,22 +51,37 @@ def check_for_updates():
         latest_version = response.text.strip()
         
         if latest_version > CURRENT_VERSION:
-            logging.info(f"Найдена новая версия {latest_version}! Обновляюсь...")
-            create_backup()
-            r = requests.get(UPDATE_URL, timeout=10)
+            logging.info(f"Найдена новая версия {latest_version}! Скачиваю EXE...")
+            
+            current_exe = sys.executable
+            new_exe = current_exe + ".new"
+            
+            r = requests.get(EXE_UPDATE_URL, timeout=30, stream=True)
             if r.status_code == 200:
-                with open(__file__, "w", encoding="utf-8") as f:
-                    f.write(r.text)
-                logging.info("ОБНОВЛЕНИЕ ЗАВЕРШЕНО. ПЕРЕЗАПУСТИТЕ СКРИПТ.")
-                os._exit(0) 
+                with open(new_exe, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                
+                logging.info("Файл скачан. Запуск процесса самозамены...")
+                
+                # Команда для CMD: подождать, удалить старый, переименовать новый, запустить снова
+                cmd_command = (
+                    f"timeout /t 2 /nobreak && "
+                    f"del /f /q \"{current_exe}\" && "
+                    f"move \"{new_exe}\" \"{current_exe}\" && "
+                    f"start \"\" \"{current_exe}\""
+                )
+                
+                os.spawnl(os.P_NOWAIT, "C:\\Windows\\System32\\cmd.exe", "/c", cmd_command)
+                os._exit(0)
             else:
-                logging.error(f"Не удалось скачать код, ошибка: {r.status_code}")
+                logging.error(f"Не удалось скачать обновление: {r.status_code}")
         else:
-            logging.info("У вас последняя версия программы.")
+            logging.info("У вас актуальная версия.")
     except Exception as e:
-        logging.error(f"Ошибка при связи с GitHub: {e}")
+        logging.error(f"Ошибка при обновлении: {e}")
 
-# 3. РАБОЧИЕ ФУНКЦИИ ДЛЯ КАССЫ
+# 3. ЭМУЛЯЦИЯ КЛАВИАТУРЫ
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 
 def _press_vk(vk):
@@ -98,45 +104,35 @@ def hard_type(text, suffix=TYPE_SUFFIX, delay=TYPE_DELAY):
     if suffix == "\r": _press_vk(0x0D)
 
 def find_target_window():
-    """Поиск окна кассы в системе"""
     try:
         for w in Desktop(backend="uia").windows():
             if TARGET_WINDOW.lower() in (w.window_text() or "").lower(): return w
     except: return None
 
+# 4. API ЭНДПОИНТЫ
 @app.post("/scan")
 async def scan(req: Dict[Any, Any]):
-    """Основной обработчик запросов на печать"""
     try:
-        # Если данные пришли в POST-запросе от сайта, используем их
         if req:
             payload = json.dumps(req, ensure_ascii=False)
-            logging.info("Получены актуальные данные от фронтенда")
+            logging.info("Получен JSON от фронтенда")
         else:
-            # Резервный тестовый payload
-            payload = (
-                "{\"doc_id\":\"228698\",\"items\":["
-                "{\"ware_id\":\"27DBB2EE-C6E7-4D22-9F3C-7C6B03378CFA\",\"price\":1651,\"quantity\":1},"
-                "{\"ware_id\":\"11475AE2-83AD-4253-80C5-44F9C1E0416E\",\"price\":3512,\"quantity\":1},"
-                "{\"ware_id\":\"25077273-0DB4-4D41-8B9B-AA79EFAAFDC5\",\"price\":2337,\"quantity\":1}"
-                "]}"
-            )
-            logging.info("Данные в запросе отсутствуют, использован тестовый payload")
+            # Заглушка, если пришел пустой запрос
+            payload = "{\"doc_id\":\"TEST-000\",\"items\":[]}"
+            logging.warning("Пустой запрос. Печатаю тестовый заголовок.")
 
         win = find_target_window()
         if not win: 
-            logging.error("Окно кассы не найдено")
-            return {"status": "error", "message": "Окно не найдено"}
+            return {"status": "error", "message": "Окно кассы не найдено. Откройте программу Касса v2."}
         
         win.set_focus()
         hard_type(payload)
-        return {"status": "ok"}
+        return {"status": "ok", "message": "Данные успешно отправлены в кассу"}
     except Exception as e:
-        logging.exception("Ошибка в функции scan")
+        logging.exception("Критическая ошибка в методе scan")
         return {"status": "error", "details": str(e)}
 
-# 4. ЗАПУСК
+# 5. ТОЧКА ВХОДА
 if __name__ == "__main__":
     check_for_updates() 
-    # Запуск сервера uvicorn без стандартных конфигов логов для корректной работы в фоне
     uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)
