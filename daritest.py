@@ -125,10 +125,10 @@ async def scan(req: Dict[Any, Any]):
     try:
         # Твой рабочий Payload (строго без изменений)
         payload = (
-            "{\"doc_id\":\"238979\",\"items\":["
-            "{\"ware_id\":\"BD4C72F8-C507-4ABC-B98E-B8290AF5FE41\",\"price\":9349,\"quantity\":2},"
-            "{\"ware_id\":\"3E815439-17FB-4D50-B7B1-AA555A56BC97\",\"price\":840,\"quantity\":6},"
-            "{\"ware_id\":\"7117019E-5A5F-441B-B6F4-53F47FFD6551\",\"price\":170,\"quantity\":5}"
+            "{\"doc_id\":\"228709\",\"items\":["
+            "{\"ware_id\":\"5E74B88C-4AA8-4858-A122-0F58F3AF0481\",\"price\":127,\"quantity\":2},"
+            "{\"ware_id\":\"791FBCC1-FEF2-421A-A13B-7DE8DC0254D1\",\"price\":7687,\"quantity\":1},"
+            "{\"ware_id\":\"24EE3342-F4D2-44EE-A842-6F720BEC2E30\",\"price\":507,\"quantity\":6}"
             "]}"
         )
         win = find_target_window()
