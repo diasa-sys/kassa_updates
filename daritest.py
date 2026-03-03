@@ -126,20 +126,35 @@ def find_target_window():
 
 # 4. API
 # 4. API (Модернизирован под структуру Go)
+from pydantic import BaseModel
+from typing import List, Optional
+
+# Описание структуры товара (Product из Go)
+class Product(BaseModel):
+    ware_id: str
+    name: str
+    quantity: int
+    price: float
+
+# Основная структура запроса (confirmOrderRequestSoft из Go)
+class OrderRequest(BaseModel):
+    phone: str
+    confirm_code: Optional[str] = None
+    bonus_used: bool
+    doc_id: str
+    source_code: str
+    items: List[Product]
+    client_bonus_debit: float
+    client_bonus_credit: float
+    pharmacist_bonus_credit: float
+
 @app.post("/scan")
-async def scan(req: Dict[Any, Any]):
+async def scan(req: OrderRequest): # Теперь Swagger будет знать точную структуру
     async with scan_lock: 
         try:
-            if not req:
-                return {"status": "error", "message": "Пустой запрос"}
-            
-            # Извлекаем важные поля для логирования (из структуры Go)
-            doc_id = req.get("doc_id", "Unknown")
-            bonus_used = req.get("bonus_used", False)
-            phone = req.get("phone", "")
-
-            # Превращаем весь объект (со всеми бонусами и кодами) в JSON-строку
-            payload = json.dumps(req, ensure_ascii=False)
+            # Превращаем модель обратно в словарь и затем в JSON для кассы
+            req_dict = req.dict()
+            payload = json.dumps(req_dict, ensure_ascii=False)
             
             win = find_target_window()
             if not win:
@@ -147,18 +162,16 @@ async def scan(req: Dict[Any, Any]):
 
             win.set_focus()
             
-            # Печатаем весь JSON целиком в кассу
+            # Печатаем JSON с твоими 3 товарами и бонусами
             hard_type(payload)
             
-            log_msg = f"Чек {doc_id} отправлен."
-            if bonus_used:
-                log_msg += f" Списание бонусов для клиента {phone}."
-            
+            log_msg = f"Чек {req.doc_id} отправлен. Бонусы: {req.bonus_used}"
             logging.info(log_msg)
-            return {"status": "ok"}
+            
+            return {"status": "ok", "doc_id": req.doc_id}
 
         except Exception as e:
-            logging.exception("Ошибка при обработке запроса от бэкенда")
+            logging.exception("Ошибка при вводе данных в кассу")
             return {"status": "error", "details": str(e)}
 
 if __name__ == "__main__":
