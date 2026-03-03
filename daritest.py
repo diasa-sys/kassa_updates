@@ -16,7 +16,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.1.0"  # Финальная версия для теста
+CURRENT_VERSION = "1.1.1"  # Финальная версия для теста
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -149,12 +149,27 @@ class OrderRequest(BaseModel):
     pharmacist_bonus_credit: float
 
 @app.post("/scan")
-async def scan(req: OrderRequest): # Теперь Swagger будет знать точную структуру
+async def scan(req: OrderRequest):
     async with scan_lock: 
         try:
-            # Превращаем модель обратно в словарь и затем в JSON для кассы
-            req_dict = req.dict()
-            payload = json.dumps(req_dict, ensure_ascii=False)
+            # 1. ФОРМИРУЕМ ПРАВИЛЬНЫЙ PAYLOAD (только нужные кассе поля)
+            # Мы берем данные из req, но упаковываем их в старый формат
+            items_data = []
+            for item in req.items:
+                items_data.append({
+                    "ware_id": item.ware_id,
+                    "price": item.price,
+                    "quantity": item.quantity
+                })
+
+            minimal_dict = {
+                "doc_id": req.doc_id,
+                "items": items_data
+            }
+
+            # 2. СЖАТИЕ: удаляем все пробелы и отступы
+            # separators=(',', ':') делает строку максимально короткой: {"a":1,"b":2}
+            payload = json.dumps(minimal_dict, ensure_ascii=False, separators=(',', ':'))
             
             win = find_target_window()
             if not win:
@@ -162,16 +177,14 @@ async def scan(req: OrderRequest): # Теперь Swagger будет знать 
 
             win.set_focus()
             
-            # Печатаем JSON с твоими 3 товарами и бонусами
+            # 3. ПЕЧАТЬ
             hard_type(payload)
             
-            log_msg = f"Чек {req.doc_id} отправлен. Бонусы: {req.bonus_used}"
-            logging.info(log_msg)
-            
-            return {"status": "ok", "doc_id": req.doc_id}
+            logging.info(f"Чек {req.doc_id} отправлен в кассу (очищенный формат)")
+            return {"status": "ok"}
 
         except Exception as e:
-            logging.exception("Ошибка при вводе данных в кассу")
+            logging.exception("Ошибка парсинга для кассы")
             return {"status": "error", "details": str(e)}
 
 if __name__ == "__main__":
