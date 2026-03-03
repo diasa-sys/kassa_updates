@@ -15,7 +15,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.1.2"
+CURRENT_VERSION = "1.1.3"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -117,11 +117,10 @@ async def scan(req: Dict[Any, Any]):
     try:
         # Ручное формирование строки, как в успешном тесте
         payload = (
-            "{\"doc_id\":\"238977\",\"items\":["
-            "{\"ware_id\":\"B1EF6A80-4472-4B5B-BC0A-9CB33A2A86CF\",\"price\":230.5,\"quantity\":4},"
-            "{\"ware_id\":\"0F466605-B6C9-47E5-815E-BBCBEC8F1CA4\",\"price\":353,\"quantity\":4},"
-            "{\"ware_id\":\"8484A0BF-EFDD-4588-818D-99CF2E3968C9\",\"price\":935,\"quantity\":2},"
-            "{\"ware_id\":\"577E74C7-159E-4680-9997-BF13694A0C78\",\"price\":2247,\"quantity\":1}"
+            "{\"doc_id\":\"238978\",\"items\":["
+            "{\"ware_id\":\"03AF03FF-6647-418F-AC78-68CC5A9A5C43\",\"price\":1088,\"quantity\":2},"
+            "{\"ware_id\":\"94C758D8-6A09-4E1A-A21B-FAD76D1A8E99\",\"price\":847,\"quantity\":2},"
+            "{\"ware_id\":\"62B5BD7E-D8AA-4471-AECF-0CAE1556C509\",\"price\":620,\"quantity\":3}"
             "]}"
         )
         
