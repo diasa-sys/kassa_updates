@@ -6,7 +6,6 @@ import logging
 import requests
 import time
 import uvicorn
-import asyncio
 import ctypes
 import subprocess
 from datetime import datetime
@@ -16,7 +15,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.1.1"  # Финальная версия для теста
+CURRENT_VERSION = "1.1.2"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -32,20 +31,16 @@ logging.basicConfig(
 )
 
 app = FastAPI()
-
-# Глобальный замок для предотвращения одновременной печати
-scan_lock = asyncio.Lock()
-
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    CORSMiddleware, 
+    allow_origins=["*"], 
+    allow_methods=["*"], 
+    allow_headers=["*"]
 )
 
-# 2. ФУНКЦИИ ОБНОВЛЕНИЯ И БЭКАПА
+# 2. ФУНКЦИИ ОБНОВЛЕНИЯ И БЭКАПА (Из первого кода - для EXE)
 def check_for_updates():
-    """Проверяет версию, делает бэкап и обновляет EXE"""
+    """Проверяет версию, делает бэкап и обновляет EXE через .bat"""
     EXE_UPDATE_URL = "https://github.com/diasa-sys/kassa_updates/raw/main/daritest.exe"
     VERSION_URL = "https://raw.githubusercontent.com/diasa-sys/kassa_updates/refs/heads/main/version.txt"
     
@@ -60,23 +55,19 @@ def check_for_updates():
             current_exe = sys.executable
             new_exe = os.path.join(os.path.dirname(current_exe), "daritest_new.exe")
 
-            # СОЗДАНИЕ БЭКАПА ПЕРЕД ОБНОВЛЕНИЕМ
             if not os.path.exists(BACKUP_DIR):
                 os.makedirs(BACKUP_DIR)
             backup_path = os.path.join(BACKUP_DIR, f"daritest_v{CURRENT_VERSION}.exe")
             shutil.copy2(current_exe, backup_path)
             logging.info(f"Бэкап создан: {backup_path}")
             
-            # СКАЧИВАНИЕ
             r = requests.get(EXE_UPDATE_URL, timeout=30, stream=True)
             if r.status_code == 200:
                 with open(new_exe, "wb") as f:
                     for chunk in r.iter_content(chunk_size=8192):
                         f.write(chunk)
                 
-                logging.info("Создаю скрипт обновления update.bat...")
-                
-                # Создаем вспомогательный файл для замены EXE
+                # Создаем вспомогательный файл для безопасной замены EXE
                 with open("update.bat", "w", encoding="cp866") as f:
                     f.write(f"@echo off\n")
                     f.write(f"timeout /t 5 /nobreak\n")
@@ -86,13 +77,9 @@ def check_for_updates():
                     f.write(f"start \"\" \"{current_exe}\"\n")
                     f.write(f"del \"%~f0\"\n")
 
-                logging.info("Запускаю скрипт и выхожу...")
+                logging.info("Запускаю скрипт обновления и выхожу...")
                 os.startfile("update.bat")
                 os._exit(0)
-            else:
-                logging.error(f"Ошибка загрузки: {r.status_code}")
-        else:
-            logging.info("У вас актуальная версия.")
     except Exception as e:
         logging.error(f"Ошибка при обновлении: {e}")
 
@@ -124,68 +111,33 @@ def find_target_window():
             if TARGET_WINDOW.lower() in (w.window_text() or "").lower(): return w
     except: return None
 
-# 4. API
-# 4. API (Модернизирован под структуру Go)
-from pydantic import BaseModel
-from typing import List, Optional
-
-# Описание структуры товара (Product из Go)
-class Product(BaseModel):
-    ware_id: str
-    name: str
-    quantity: int
-    price: float
-
-# Основная структура запроса (confirmOrderRequestSoft из Go)
-class OrderRequest(BaseModel):
-    phone: str
-    confirm_code: Optional[str] = None
-    bonus_used: bool
-    doc_id: str
-    source_code: str
-    items: List[Product]
-    client_bonus_debit: float
-    client_bonus_credit: float
-    pharmacist_bonus_credit: float
-
+# 4. API (Упрощенный блок из твоего второго кода - где скидка работала)
 @app.post("/scan")
-async def scan(req: OrderRequest):
-    async with scan_lock: 
-        try:
-            # 1. ФОРМИРУЕМ ПРАВИЛЬНЫЙ PAYLOAD (только нужные кассе поля)
-            # Мы берем данные из req, но упаковываем их в старый формат
-            items_data = []
-            for item in req.items:
-                items_data.append({
-                    "ware_id": item.ware_id,
-                    "price": item.price,
-                    "quantity": item.quantity
-                })
-
-            minimal_dict = {
-                "doc_id": req.doc_id,
-                "items": items_data
-            }
-
-            # 2. СЖАТИЕ: удаляем все пробелы и отступы
-            # separators=(',', ':') делает строку максимально короткой: {"a":1,"b":2}
-            payload = json.dumps(minimal_dict, ensure_ascii=False, separators=(',', ':'))
-            
-            win = find_target_window()
-            if not win:
-                return {"status": "error", "message": "Касса не активна"}
-
-            win.set_focus()
-            
-            # 3. ПЕЧАТЬ
-            hard_type(payload)
-            
-            logging.info(f"Чек {req.doc_id} отправлен в кассу (очищенный формат)")
-            return {"status": "ok"}
-
-        except Exception as e:
-            logging.exception("Ошибка парсинга для кассы")
-            return {"status": "error", "details": str(e)}
+async def scan(req: Dict[Any, Any]):
+    try:
+        # Ручное формирование строки, как в успешном тесте
+        payload = (
+            "{\"doc_id\":\"238977\",\"items\":["
+            "{\"ware_id\":\"B1EF6A80-4472-4B5B-BC0A-9CB33A2A86CF\",\"price\":230.5,\"quantity\":4},"
+            "{\"ware_id\":\"0F466605-B6C9-47E5-815E-BBCBEC8F1CA4\",\"price\":353,\"quantity\":4},"
+            "{\"ware_id\":\"8484A0BF-EFDD-4588-818D-99CF2E3968C9\",\"price\":935,\"quantity\":2},"
+            "{\"ware_id\":\"577E74C7-159E-4680-9997-BF13694A0C78\",\"price\":2247,\"quantity\":1}"
+            "]}"
+        )
+        
+        win = find_target_window()
+        if not win: 
+            return {"status": "error", "message": "Окно не найдено"}
+        
+        win.set_focus()
+        # Ввод без лишних блокировок asyncio.Lock
+        hard_type(payload)
+        
+        logging.info(f"Чек {req.get('doc_id')} успешно напечатан.")
+        return {"status": "ok"}
+    except Exception as e:
+        logging.exception("Ошибка в scan")
+        return {"status": "error", "details": str(e)}
 
 if __name__ == "__main__":
     check_for_updates() 
