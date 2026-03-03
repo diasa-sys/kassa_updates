@@ -15,7 +15,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.1.3"
+CURRENT_VERSION = "1.1.4"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -115,27 +115,43 @@ def find_target_window():
 @app.post("/scan")
 async def scan(req: Dict[Any, Any]):
     try:
-        # Ручное формирование строки, как в успешном тесте
-        payload = (
-            "{\"doc_id\":\"238978\",\"items\":["
-            "{\"ware_id\":\"03AF03FF-6647-418F-AC78-68CC5A9A5C43\",\"price\":1088,\"quantity\":2},"
-            "{\"ware_id\":\"94C758D8-6A09-4E1A-A21B-FAD76D1A8E99\",\"price\":847,\"quantity\":2},"
-            "{\"ware_id\":\"62B5BD7E-D8AA-4471-AECF-0CAE1556C509\",\"price\":620,\"quantity\":3}"
-            "]}"
-        )
+        # 1. Проверяем наличие данных в запросе
+        doc_id = req.get("doc_id", "238978")
+        items = req.get("items", [])
         
+        if not items:
+            # Тот самый "железобетонный" payload с тремя товарами
+            payload = (
+                "{\"doc_id\":\"238978\",\"items\":["
+                "{\"ware_id\":\"03AF03FF-6647-418F-AC78-68CC5A9A5C43\",\"price\":1088,\"quantity\":2},"
+                "{\"ware_id\":\"94C758D8-6A09-4E1A-A21B-FAD76D1A8E99\",\"price\":847,\"quantity\":2},"
+                "{\"ware_id\":\"62B5BD7E-D8AA-4471-AECF-0CAE1556C509\",\"price\":620,\"quantity\":3}"
+                "]}"
+            )
+        else:
+            # Собираем payload динамически из того, что прислал Swagger
+            items_list = []
+            for item in items:
+                w_id = item.get("ware_id")
+                price = item.get("price")
+                qty = item.get("quantity")
+                items_list.append(f"{{\"ware_id\":\"{w_id}\",\"price\":{price},\"quantity\":{qty}}}")
+            
+            payload = f"{{\"doc_id\":\"{doc_id}\",\"items\":[{','.join(items_list)}]}}"
+
+        # 2. Поиск окна и ввод данных
         win = find_target_window()
         if not win: 
             return {"status": "error", "message": "Окно не найдено"}
-        
+            
         win.set_focus()
-        # Ввод без лишних блокировок asyncio.Lock
         hard_type(payload)
         
-        logging.info(f"Чек {req.get('doc_id')} успешно напечатан.")
-        return {"status": "ok"}
+        logging.info(f"Чек {doc_id} успешно отправлен в кассу.")
+        return {"status": "ok", "sent_payload": payload}
+        
     except Exception as e:
-        logging.exception("Ошибка в scan")
+        logging.exception("Ошибка при выполнении scan")
         return {"status": "error", "details": str(e)}
 
 if __name__ == "__main__":
