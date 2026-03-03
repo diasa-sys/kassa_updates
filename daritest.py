@@ -6,6 +6,7 @@ import logging
 import requests
 import time
 import uvicorn
+import asyncio
 import ctypes
 import subprocess
 from datetime import datetime
@@ -15,7 +16,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.0.9"  # Финальная версия для теста
+CURRENT_VERSION = "1.1.0"  # Финальная версия для теста
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -31,6 +32,9 @@ logging.basicConfig(
 )
 
 app = FastAPI()
+
+# Глобальный замок для предотвращения одновременной печати
+scan_lock = asyncio.Lock()
 
 app.add_middleware(
     CORSMiddleware,
@@ -72,7 +76,7 @@ def check_for_updates():
                 
                 logging.info("Создаю скрипт обновления update.bat...")
                 
-                # Создаем вспомогательный файл, который сделает замену
+                # Создаем вспомогательный файл для замены EXE
                 with open("update.bat", "w", encoding="cp866") as f:
                     f.write(f"@echo off\n")
                     f.write(f"timeout /t 5 /nobreak\n")
@@ -80,11 +84,11 @@ def check_for_updates():
                     f.write(f"del /f /q \"{current_exe}\"\n")
                     f.write(f"move /y \"{new_exe}\" \"{current_exe}\"\n")
                     f.write(f"start \"\" \"{current_exe}\"\n")
-                    f.write(f"del \"%~f0\"\n") # Батник удалит сам себя в конце
+                    f.write(f"del \"%~f0\"\n")
 
                 logging.info("Запускаю скрипт и выхожу...")
-                os.startfile("update.bat") # Windows запустит батник отдельно
-                os._exit(0) # Программа СРАЗУ закроется, освободив файл
+                os.startfile("update.bat")
+                os._exit(0)
             else:
                 logging.error(f"Ошибка загрузки: {r.status_code}")
         else:
@@ -121,21 +125,42 @@ def find_target_window():
     except: return None
 
 # 4. API
+# 4. API (Модернизирован под структуру Go)
 @app.post("/scan")
 async def scan(req: Dict[Any, Any]):
-    try:
-        payload = json.dumps(req, ensure_ascii=False) if req else "{\"doc_id\":\"тест\"}"
-        win = find_target_window()
-        if not win: return {"status": "error", "message": "Окно кассы не найдено"}
-        
-        win.set_focus()
-        hard_type(payload)
-        return {"status": "ok"}
-    except Exception as e:
-        logging.exception("Ошибка в методе scan")
-        return {"status": "error", "details": str(e)}
+    async with scan_lock: 
+        try:
+            if not req:
+                return {"status": "error", "message": "Пустой запрос"}
+            
+            # Извлекаем важные поля для логирования (из структуры Go)
+            doc_id = req.get("doc_id", "Unknown")
+            bonus_used = req.get("bonus_used", False)
+            phone = req.get("phone", "")
+
+            # Превращаем весь объект (со всеми бонусами и кодами) в JSON-строку
+            payload = json.dumps(req, ensure_ascii=False)
+            
+            win = find_target_window()
+            if not win:
+                return {"status": "error", "message": "Касса не активна"}
+
+            win.set_focus()
+            
+            # Печатаем весь JSON целиком в кассу
+            hard_type(payload)
+            
+            log_msg = f"Чек {doc_id} отправлен."
+            if bonus_used:
+                log_msg += f" Списание бонусов для клиента {phone}."
+            
+            logging.info(log_msg)
+            return {"status": "ok"}
+
+        except Exception as e:
+            logging.exception("Ошибка при обработке запроса от бэкенда")
+            return {"status": "error", "details": str(e)}
 
 if __name__ == "__main__":
     check_for_updates() 
     uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)
-
