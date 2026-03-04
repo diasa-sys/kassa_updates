@@ -13,7 +13,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.1.7"
+CURRENT_VERSION = "1.1.8"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -125,8 +125,10 @@ async def scan(req: Dict[Any, Any]):
     try:
         # Твой рабочий Payload (строго без изменений)
         payload = (
-            "{\"payment_type\":\"internet\",\"doc_id\":\"238981\",\"items\":["
-            "{\"ware_id\":\"B7C9B5B9-241D-4CB5-BBB3-19CB563B99B1\",\"price\":1621,\"quantity\":1}"
+            "{\"payment_type\":\"internet\",\"doc_id\":\"238983\",\"items\":["
+            "{\"ware_id\":\"0383A040-78A5-4FA0-96F2-6427FBB05BBD\",\"price\":237,\"quantity\":1},"
+	        "{\"ware_id\":\"C2754F1D-0209-4FBC-A419-7C8F1DFF686A\",\"price\":1546,\"quantity\":3},"
+	        "{\"ware_id\":\"B7C9B5B9-241D-4CB5-BBB3-19CB563B99B1\",\"price\":2061,\"quantity\":1}"
             "]}"
         )
         win = find_target_window()
@@ -143,3 +145,4 @@ if __name__ == "__main__":
     check_for_updates() 
     # log_config=None важен для стабильности вывода в EXE
     uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)
+
