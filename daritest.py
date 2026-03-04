@@ -13,11 +13,11 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.1.8"
+CURRENT_VERSION = "1.1.9"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
-TYPE_DELAY = 0.0008
+TYPE_DELAY = 0.02
 
 logging.basicConfig(
     level=logging.INFO,
@@ -145,4 +145,5 @@ if __name__ == "__main__":
     check_for_updates() 
     # log_config=None важен для стабильности вывода в EXE
     uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)
+
 
