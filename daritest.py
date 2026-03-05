@@ -125,12 +125,10 @@ async def scan(req: Dict[Any, Any]):
     try:
         # Твой рабочий Payload (строго без изменений)
         payload = (
-            "{\"payment_type\":\"internet\",\"doc_id\":\"238986\",\"items\":["
-            "{\"ware_id\":\"B62BD5A6-AE7F-40A8-8E47-645AA0396B4B\",\"price\":549,\"quantity\":1},"
-            "{\"ware_id\":\"7B74D481-4303-4519-A04C-E99C83F56D9F\",\"price\":0,\"quantity\":2},"
-            "{\"ware_id\":\"1BB70D51-995B-4E1B-B019-7780154F2E09\",\"price\":1515,\"quantity\":2},"
-            "{\"ware_id\":\"1BB70D51-995B-4E1B-B019-7780154F2E09\",\"price\":1769,\"quantity\":2},"
-            "{\"ware_id\":\"0087A2AB-A1F5-4EF9-A88D-466B8D44B96F\",\"price\":630,\"quantity\":3}"
+            "{\"payment_type\":\"internet\",\"doc_id\":\"228717\",\"items\":["
+            "{\"ware_id\":\"58071EDE-927A-4C8D-9782-050C60CBD5BE\",\"price\":2405,\"quantity\":1},"
+            "{\"ware_id\":\"19280F82-FE66-4BB3-99D4-184CB5B6C6E2\",\"price\":1150,\"quantity\":1},"
+            "{\"ware_id\":\"5AEDCB14-EFC7-499E-8A6E-5BAC9CF89B25\",\"price\":1,\"quantity\":1}"
             "]}"
         )
         win = find_target_window()
