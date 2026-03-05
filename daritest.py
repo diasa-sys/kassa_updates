@@ -13,7 +13,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.3.2"
+CURRENT_VERSION = "1.3.3"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -125,7 +125,7 @@ async def scan(req: Dict[Any, Any]):
     try:
         # Твой рабочий Payload (строго без изменений)
         payload = (
-            "{\"payment_type\":\"internet\",\"doc_id\":\"228717\",\"items\":["
+            "{\"payment_type\":\"internet\",\"doc_id\":\"238986\",\"items\":["
             "{\"ware_id\":\"58071EDE-927A-4C8D-9782-050C60CBD5BE\",\"price\":2405,\"quantity\":1},"
             "{\"ware_id\":\"19280F82-FE66-4BB3-99D4-184CB5B6C6E2\",\"price\":1150,\"quantity\":1},"
             "{\"ware_id\":\"5AEDCB14-EFC7-499E-8A6E-5BAC9CF89B25\",\"price\":1,\"quantity\":1}"
