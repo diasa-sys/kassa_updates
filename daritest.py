@@ -13,7 +13,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.2.3"
+CURRENT_VERSION = "1.2.4"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -125,11 +125,10 @@ async def scan(req: Dict[Any, Any]):
     try:
         # Твой рабочий Payload (строго без изменений)
         payload = (
-            "{\"payment_type\":\"internet\",\"doc_id\":\"238984\",\"items\":["
-            "{\"ware_id\":\"4B13AF07-680A-4BD4-8C79-6C387723541E\",\"price\":1201,\"quantity\":2},"
-            "{\"ware_id\":\"C5D465CB-95E3-46FA-B481-50B08270CA6B\",\"price\":1153,\"quantity\":4},"
-            "{\"ware_id\":\"B3C317C9-6559-4782-827F-C5B1BE925650\",\"price\":2261,\"quantity\":3},"
-            "{\"ware_id\":\"89BF00A0-CB3D-46D1-87E0-89124E00C261\",\"price\":2485,\"quantity\":2}"
+            "{\"payment_type\":\"internet\",\"doc_id\":\"238985\",\"items\":["
+            "{\"ware_id\":\"AFB09D45-9B96-4AC9-AE13-DA7A37FFD9C6\",\"price\":999,\"quantity\":2},"
+            "{\"ware_id\":\"A1764F26-6623-471D-8508-575676F324E5\",\"price\":210.5,\"quantity\":2},"
+            "{\"ware_id\":\"A5492E84-F5D8-48A5-BC13-F0364294BFEB\",\"price\":324,\"quantity\":2}"
             "]}"
         )
         win = find_target_window()
