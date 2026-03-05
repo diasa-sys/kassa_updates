@@ -13,11 +13,11 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.1.9"
+CURRENT_VERSION = "1.2.0"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
-TYPE_DELAY = 0.02
+TYPE_DELAY = 0.0008
 
 logging.basicConfig(
     level=logging.INFO,
@@ -125,10 +125,11 @@ async def scan(req: Dict[Any, Any]):
     try:
         # Твой рабочий Payload (строго без изменений)
         payload = (
-            "{\"payment_type\":\"internet\",\"doc_id\":\"238983\",\"items\":["
-            "{\"ware_id\":\"0383A040-78A5-4FA0-96F2-6427FBB05BBD\",\"price\":237,\"quantity\":1},"
-	        "{\"ware_id\":\"C2754F1D-0209-4FBC-A419-7C8F1DFF686A\",\"price\":1546,\"quantity\":3},"
-	        "{\"ware_id\":\"B7C9B5B9-241D-4CB5-BBB3-19CB563B99B1\",\"price\":2061,\"quantity\":1}"
+            "{\"payment_type\":\"internet\",\"doc_id\":\"238984\",\"items\":["
+            "{\"ware_id\":\"4B13AF07-680A-4BD4-8C79-6C387723541E\",\"price\":1201,\"quantity\":2}"
+            "{\"ware_id\":\"C5D465CB-95E3-46FA-B481-50B08270CA6B\",\"price\":1153,\"quantity\":4}"
+            "{\"ware_id\":\"B3C317C9-6559-4782-827F-C5B1BE925650\",\"price\":2261,\"quantity\":3}"
+            "{\"ware_id\":\"89BF00A0-CB3D-46D1-87E0-89124E00C261\",\"price\":2485,\"quantity\":2}"
             "]}"
         )
         win = find_target_window()
@@ -145,5 +146,3 @@ if __name__ == "__main__":
     check_for_updates() 
     # log_config=None важен для стабильности вывода в EXE
     uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)
-
-
