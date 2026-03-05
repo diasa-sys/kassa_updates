@@ -13,7 +13,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.2.5"
+CURRENT_VERSION = "1.3.0"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -123,23 +123,15 @@ def find_target_window():
 @app.post("/scan")
 async def scan(req: Dict[Any, Any]):
     try:
-        # Плотный payload без пробелов, чтобы база Firebird корректно распарсила длину
+        # Твой рабочий Payload (строго без изменений)
         payload = (
-            "{\"doc_id\":\"238985\",\"items\":["
-            "{\"ware_id\":\"AFB09D45-9B96-4AC9-AE13-DA7A37FFD9C6\",\"price\":999,\"quantity\":2},"
-            "{\"ware_id\":\"A1764F26-6623-471D-8508-575676F324E5\",\"price\":210.5,\"quantity\":2},"
-            "{\"ware_id\":\"A5492E84-F5D8-48A5-BC13-F0364294BFEB\",\"price\":324,\"quantity\":2}"
+            "{\"payment_type\":\"internet\",\"doc_id\":\"238986\",\"items\":["
+            "{\"ware_id\":\"7B74D481-4303-4519-A04C-E99C83F56D9F\",\"price\":53,\"quantity\":2}"
             "]}"
         )
-        
         win = find_target_window()
-        if not win: 
-            return {"status": "error", "message": "Окно не найдено"}
-            
+        if not win: return {"status": "error", "message": "Окно не найдено"}
         win.set_focus()
-        # Пауза 0.1 сек для стабильности фокуса перед вводом
-        time.sleep(0.1) 
-        
         hard_type(payload)
         return {"status": "ok"}
     except Exception as e:
