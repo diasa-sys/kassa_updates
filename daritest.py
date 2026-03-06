@@ -13,7 +13,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.3.8"
+CURRENT_VERSION = "1.0.1"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -28,6 +28,7 @@ logging.basicConfig(
     ]
 )
 
+
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -36,13 +37,13 @@ def create_backup():
     """Создает резервную копию текущего EXE перед заменой"""
     if not os.path.exists(BACKUP_DIR):
         os.makedirs(BACKUP_DIR)
-    
+
     current_exe = sys.executable
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     # Если запущен как скрипт, бэкапим .py, если как EXE — бэкапим EXE
     ext = ".exe" if current_exe.endswith(".exe") else ".py"
     backup_path = os.path.join(BACKUP_DIR, f"daritest_v{CURRENT_VERSION}_{timestamp}{ext}")
-    
+
     try:
         shutil.copy2(current_exe, backup_path)
         logging.info(f"Бэкап создан: {backup_path}")
@@ -53,27 +54,25 @@ def check_for_updates():
     """Проверка версии и обновление EXE через вспомогательный BAT-файл"""
     EXE_UPDATE_URL = "https://github.com/diasa-sys/kassa_updates/raw/main/daritest.exe"
     VERSION_URL = "https://raw.githubusercontent.com/diasa-sys/kassa_updates/refs/heads/main/version.txt"
-    
+
     try:
         logging.info(f"--- Проверка обновлений (Версия {CURRENT_VERSION}) ---")
         response = requests.get(VERSION_URL, timeout=5)
         latest_version = response.text.strip()
-        
+
         if latest_version > CURRENT_VERSION:
             logging.info(f"Найдена новая версия {latest_version}! Подготовка...")
-            
             create_backup()
-            
             current_exe = sys.executable
             new_exe = os.path.join(os.path.dirname(current_exe), "daritest_new.exe")
-            
+
             # Скачиваем новый файл
             r = requests.get(EXE_UPDATE_URL, timeout=30, stream=True)
             if r.status_code == 200:
                 with open(new_exe, "wb") as f:
                     for chunk in r.iter_content(chunk_size=8192):
                         f.write(chunk)
-                
+
                 # Создаем BAT-скрипт для безопасной замены работающего EXE
                 with open("update.bat", "w", encoding="cp866") as f:
                     f.write(f"@echo off\n")
@@ -87,12 +86,16 @@ def check_for_updates():
                 logging.info("Обновление загружено. Запускаю замену...")
                 os.startfile("update.bat")
                 os._exit(0)
+
         else:
             logging.info("У вас актуальная версия.")
     except Exception as e:
         logging.error(f"Ошибка при обновлении: {e}")
 
+
+
 # 3. РАБОЧИЕ ФУНКЦИИ (Твой оригинал, не трогаем)
+
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 
 def _press_vk(vk):
@@ -120,32 +123,39 @@ def find_target_window():
             if TARGET_WINDOW.lower() in (w.window_text() or "").lower(): return w
     except: return None
 
+
+
 from pydantic import BaseModel
 from typing import List, Optional
-from fastapi import APIRouter, Body
-from starlette.requests import Request
-
+from fastapi import Body
 import json
 
+
 class ModelItem(BaseModel):
-    # Должно быть строго как в JSON фронтенда
     ware_id: Optional[str] = None
     price: Optional[float] = None
     quantity: Optional[int] = None
 
+
 class FrontendReq(BaseModel):
-    # Должно быть строго как в JSON фронтенда
     doc_id: Optional[str] = None
     payment_type: Optional[str] = "internet"
     items: List[ModelItem] = []
 
 
 @app.post("/scan")
-async def scan(request: FrontendReq):
+async def scan(request: FrontendReq = Body(...)):
     try:
-        # Превращаем в строку без пробелов для кассы
+        logging.info(f"Получен запрос: {request}")
+
+        if not request.items:
+            return {"status": "error", "message": "Список товаров пуст"}
+
+        # Работаем через float (будет 490.0 в JSON)
+        data_dict = request.model_dump(exclude_none=True)
+
         payload_to_type = json.dumps(
-            request.model_dump(),
+            data_dict,
             ensure_ascii=False,
             separators=(',', ':')
         )
@@ -154,16 +164,26 @@ async def scan(request: FrontendReq):
 
         win = find_target_window()
         if not win:
+            logging.error("Окно кассы не найдено")
             return {"status": "error", "message": "Окно кассы не найдено"}
 
+        # Сначала фокус
         win.set_focus()
+        time.sleep(0.1)
+        
+        # Принудительно ставим английский для текущего потока ввода
+        ctypes.windll.user32.ActivateKeyboardLayout(0x04090409, 0)
+        
         hard_type(payload_to_type)
 
+        logging.info("Данные успешно отправлены в кассу")
         return {"status": "ok"}
 
     except Exception as e:
         logging.exception("Ошибка при обработке запроса")
         return {"status": "error", "details": str(e)}
+
+
 
 # 4. ЗАПУСК
 if __name__ == "__main__":
