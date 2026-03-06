@@ -13,7 +13,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.3.5"
+CURRENT_VERSION = "1.0.1"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -120,33 +120,48 @@ def find_target_window():
             if TARGET_WINDOW.lower() in (w.window_text() or "").lower(): return w
     except: return None
 
+from pydantic import BaseModel
+from typing import List, Optional
+from fastapi import APIRouter, Body
+from starlette.requests import Request
+
+import json
+
+class ModelItem(BaseModel):
+    # Используем такие же имена, как в твоем JSON примере
+    ware_id: Optional[str] = None
+    price: Optional[float] = None
+    quantity: Optional[int] = None
+
+class FrontendReq(BaseModel):
+    doc_id: Optional[str] = None
+    payment_type: Optional[str] = "internet"
+    items: List[ModelItem] = []
+
+
 @app.post("/scan")
-async def scan(req: Dict[Any, Any]):
+async def scan(request: FrontendReq):
     try:
-        # 1. Берем данные, которые прислал фронтенд
-        incoming_payload = req.get("payload")
-        
-        if not incoming_payload:
-            logging.error("Фронтенд прислал пустой запрос или без поля 'payload'")
-            return {"status": "error", "message": "Payload не найден в запросе"}
+        # Превращаем в строку без пробелов для кассы
+        payload_to_type = json.dumps(
+            request.model_dump(),
+            ensure_ascii=False,
+            separators=(',', ':')
+        )
 
-        # 2. Превращаем JSON в строку БЕЗ пробелов (важно для парсера кассы)
-        import json
-        payload_to_type = json.dumps(incoming_payload, separators=(',', ':'))
-        
-        logging.info(f"Получен живой JSON от фронта: {payload_to_type}")
+        logging.info(f"Отправка в кассу: {payload_to_type}")
 
-        # 3. Печатаем в кассу
         win = find_target_window()
-        if not win: 
-            return {"status": "error", "message": "Окно не найдено"}
-            
+        if not win:
+            return {"status": "error", "message": "Окно кассы не найдено"}
+
         win.set_focus()
         hard_type(payload_to_type)
+
         return {"status": "ok"}
-        
+
     except Exception as e:
-        logging.exception("Ошибка при обработке запроса от фронтенда")
+        logging.exception("Ошибка при обработке запроса")
         return {"status": "error", "details": str(e)}
 
 # 4. ЗАПУСК
