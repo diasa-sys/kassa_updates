@@ -13,7 +13,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.3.6"
+CURRENT_VERSION = "1.3.7"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -128,14 +128,14 @@ from starlette.requests import Request
 import json
 
 class ModelItem(BaseModel):
-    # Используем такие же имена, как в твоем JSON примере
-    ware_id: Optional[str] = None
-    price: Optional[float] = None
-    quantity: Optional[int] = None
+    wareID: Optional[str]
+    price: Optional[float]
+    quantity: Optional[int]
+
 
 class FrontendReq(BaseModel):
-    doc_id: Optional[str] = None
-    payment_type: Optional[str] = "internet"
+    docID: Optional[str]
+    paymentType: Optional[str] = "internet"
     items: List[ModelItem] = []
 
 
