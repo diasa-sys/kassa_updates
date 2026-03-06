@@ -13,7 +13,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.3.3"
+CURRENT_VERSION = "1.3.4"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -123,19 +123,30 @@ def find_target_window():
 @app.post("/scan")
 async def scan(req: Dict[Any, Any]):
     try:
-        # Твой рабочий Payload (строго без изменений)
-        payload = (
-            "{\"payment_type\":\"internet\",\"doc_id\":\"238986\",\"items\":["
-            "{\"ware_id\":\"58071EDE-927A-4C8D-9782-050C60CBD5BE\",\"price\":2405,\"quantity\":1},"
-            "{\"ware_id\":\"19280F82-FE66-4BB3-99D4-184CB5B6C6E2\",\"price\":1150,\"quantity\":1},"
-            "{\"ware_id\":\"5AEDCB14-EFC7-499E-8A6E-5BAC9CF89B25\",\"price\":1,\"quantity\":1}"
-            "]}"
-        )
+        # 1. ПОЛУЧАЕМ ДАННЫЕ ОТ ФРОНТЕНДА
+        # Фронтенд должен прислать JSON в теле запроса
+        incoming_data = req.get("payload")
+        
+        if not incoming_data:
+            # Если фронт ничего не прислал, выдаем ошибку
+            return {"status": "error", "message": "Данные (payload) не получены от фронта"}
+
+        # 2. ПРЕВРАЩАЕМ В СТРОКУ (убираем пробелы для кассы)
+        import json
+        # separators=(',', ':') убирает все пробелы, чтобы не было ошибки SUBSTRING -17
+        payload = json.dumps(incoming_data, separators=(',', ':'))
+        
+        logging.info(f"Фронтенд прислал: {payload}")
+
+        # 3. ДАЛЬШЕ ТВОЯ СТАНДАРТНАЯ ЛОГИКА
         win = find_target_window()
-        if not win: return {"status": "error", "message": "Окно не найдено"}
+        if not win: 
+            return {"status": "error", "message": "Окно не найдено"}
+            
         win.set_focus()
         hard_type(payload)
         return {"status": "ok"}
+        
     except Exception as e:
         logging.exception("Ошибка в scan")
         return {"status": "error", "details": str(e)}
