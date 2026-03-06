@@ -13,7 +13,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.3.4"
+CURRENT_VERSION = "1.3.5"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -123,32 +123,30 @@ def find_target_window():
 @app.post("/scan")
 async def scan(req: Dict[Any, Any]):
     try:
-        # 1. ПОЛУЧАЕМ ДАННЫЕ ОТ ФРОНТЕНДА
-        # Фронтенд должен прислать JSON в теле запроса
-        incoming_data = req.get("payload")
+        # 1. Берем данные, которые прислал фронтенд
+        incoming_payload = req.get("payload")
         
-        if not incoming_data:
-            # Если фронт ничего не прислал, выдаем ошибку
-            return {"status": "error", "message": "Данные (payload) не получены от фронта"}
+        if not incoming_payload:
+            logging.error("Фронтенд прислал пустой запрос или без поля 'payload'")
+            return {"status": "error", "message": "Payload не найден в запросе"}
 
-        # 2. ПРЕВРАЩАЕМ В СТРОКУ (убираем пробелы для кассы)
+        # 2. Превращаем JSON в строку БЕЗ пробелов (важно для парсера кассы)
         import json
-        # separators=(',', ':') убирает все пробелы, чтобы не было ошибки SUBSTRING -17
-        payload = json.dumps(incoming_data, separators=(',', ':'))
+        payload_to_type = json.dumps(incoming_payload, separators=(',', ':'))
         
-        logging.info(f"Фронтенд прислал: {payload}")
+        logging.info(f"Получен живой JSON от фронта: {payload_to_type}")
 
-        # 3. ДАЛЬШЕ ТВОЯ СТАНДАРТНАЯ ЛОГИКА
+        # 3. Печатаем в кассу
         win = find_target_window()
         if not win: 
             return {"status": "error", "message": "Окно не найдено"}
             
         win.set_focus()
-        hard_type(payload)
+        hard_type(payload_to_type)
         return {"status": "ok"}
         
     except Exception as e:
-        logging.exception("Ошибка в scan")
+        logging.exception("Ошибка при обработке запроса от фронтенда")
         return {"status": "error", "details": str(e)}
 
 # 4. ЗАПУСК
