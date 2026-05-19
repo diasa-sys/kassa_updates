@@ -11,6 +11,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pywinauto import Desktop
 from typing import Dict, Any
+from pydantic import BaseModel
+from typing import List, Optional
+from fastapi import Body
+import json
+from packaging import version
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
 CURRENT_VERSION = "1.0.1"
@@ -28,19 +33,16 @@ logging.basicConfig(
     ]
 )
 
-
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# 2. ФУНКЦИИ ОБНОВЛЕНИЯ И БЭКАПА (Скорректировано под EXE)
+# 2. ФУНКЦИИ ОБНОВЛЕНИЯ И БЭКАПА
 def create_backup():
-    """Создает резервную копию текущего EXE перед заменой"""
     if not os.path.exists(BACKUP_DIR):
         os.makedirs(BACKUP_DIR)
 
     current_exe = sys.executable
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    # Если запущен как скрипт, бэкапим .py, если как EXE — бэкапим EXE
     ext = ".exe" if current_exe.endswith(".exe") else ".py"
     backup_path = os.path.join(BACKUP_DIR, f"daritest_v{CURRENT_VERSION}_{timestamp}{ext}")
 
@@ -51,7 +53,6 @@ def create_backup():
         logging.error(f"Не удалось создать бэкап: {e}")
 
 def check_for_updates():
-    """Проверка версии и обновление EXE через вспомогательный BAT-файл"""
     EXE_UPDATE_URL = "https://github.com/diasa-sys/kassa_updates/raw/main/daritest.exe"
     VERSION_URL = "https://raw.githubusercontent.com/diasa-sys/kassa_updates/refs/heads/main/version.txt"
 
@@ -60,20 +61,18 @@ def check_for_updates():
         response = requests.get(VERSION_URL, timeout=5)
         latest_version = response.text.strip()
 
-        if latest_version > CURRENT_VERSION:
+        if version.parse(latest_version) > version.parse(CURRENT_VERSION):
             logging.info(f"Найдена новая версия {latest_version}! Подготовка...")
             create_backup()
             current_exe = sys.executable
             new_exe = os.path.join(os.path.dirname(current_exe), "daritest_new.exe")
 
-            # Скачиваем новый файл
-            r = requests.get(EXE_UPDATE_URL, timeout=30, stream=True)
+            r = requests.get(EXE_UPDATE_URL, timeout=120, stream=True)
             if r.status_code == 200:
                 with open(new_exe, "wb") as f:
                     for chunk in r.iter_content(chunk_size=8192):
                         f.write(chunk)
 
-                # Создаем BAT-скрипт для безопасной замены работающего EXE
                 with open("update.bat", "w", encoding="cp866") as f:
                     f.write(f"@echo off\n")
                     f.write(f"timeout /t 3 /nobreak\n")
@@ -85,7 +84,7 @@ def check_for_updates():
 
                 logging.info("Обновление загружено. Запускаю замену...")
                 os.startfile("update.bat")
-                os._exit(0)
+                sys.exit(0)
 
         else:
             logging.info("У вас актуальная версия.")
@@ -93,8 +92,7 @@ def check_for_updates():
         logging.error(f"Ошибка при обновлении: {e}")
 
 
-
-# 3. РАБОЧИЕ ФУНКЦИИ (Твой оригинал, не трогаем)
+# 3. РАБОЧИЕ ФУНКЦИИ
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 
@@ -120,16 +118,14 @@ def hard_type(text, suffix=TYPE_SUFFIX, delay=TYPE_DELAY):
 def find_target_window():
     try:
         for w in Desktop(backend="uia").windows():
-            if TARGET_WINDOW.lower() in (w.window_text() or "").lower(): return w
-    except: return None
+            if TARGET_WINDOW.lower() in (w.window_text() or "").lower():
+                return w
+    except Exception as e:
+        logging.warning(f"Ошибка поиска окна: {e}")
+        return None
 
 
-
-from pydantic import BaseModel
-from typing import List, Optional
-from fastapi import Body
-import json
-
+# 4. МОДЕЛИ
 
 class ModelItem(BaseModel):
     ware_id: Optional[str] = None
@@ -140,8 +136,11 @@ class ModelItem(BaseModel):
 class FrontendReq(BaseModel):
     doc_id: Optional[str] = None
     payment_type: Optional[str] = "internet"
+    order_number: Optional[str] = None  # ← новое поле
     items: List[ModelItem] = []
 
+
+# 5. ЭНДПОИНТЫ
 
 @app.post("/scan")
 async def scan(request: FrontendReq = Body(...)):
@@ -151,7 +150,6 @@ async def scan(request: FrontendReq = Body(...)):
         if not request.items:
             return {"status": "error", "message": "Список товаров пуст"}
 
-        # Работаем через float (будет 490.0 в JSON)
         data_dict = request.model_dump(exclude_none=True)
 
         payload_to_type = json.dumps(
@@ -167,13 +165,11 @@ async def scan(request: FrontendReq = Body(...)):
             logging.error("Окно кассы не найдено")
             return {"status": "error", "message": "Окно кассы не найдено"}
 
-        # Сначала фокус
         win.set_focus()
         time.sleep(0.1)
-        
-        # Принудительно ставим английский для текущего потока ввода
+
         ctypes.windll.user32.ActivateKeyboardLayout(0x04090409, 0)
-        
+
         hard_type(payload_to_type)
 
         logging.info("Данные успешно отправлены в кассу")
@@ -184,9 +180,7 @@ async def scan(request: FrontendReq = Body(...)):
         return {"status": "error", "details": str(e)}
 
 
-
-# 4. ЗАПУСК
+# 6. ЗАПУСК
 if __name__ == "__main__":
-    check_for_updates() 
-    # log_config=None важен для стабильности вывода в EXE
+    check_for_updates()
     uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)
