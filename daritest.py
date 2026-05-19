@@ -13,7 +13,7 @@ from pywinauto import Desktop
 from typing import Dict, Any
 
 # 1. НАСТРОЙКИ И ЛОГИРОВАНИЕ
-CURRENT_VERSION = "1.0.1"
+CURRENT_VERSION = "1.0.2"
 BACKUP_DIR = "backups"
 TARGET_WINDOW = "Касса v2."
 TYPE_SUFFIX = "\r"
@@ -116,7 +116,6 @@ class ModelItem(BaseModel):
     price: Optional[float] = None
     quantity: Optional[int] = None
 
-# ↓ ЕДИНСТВЕННОЕ ИЗМЕНЕНИЕ — добавлен order_number
 class FrontendReq(BaseModel):
     doc_id: Optional[str] = None
     payment_type: Optional[str] = "internet"
@@ -127,25 +126,46 @@ class FrontendReq(BaseModel):
 async def scan(request: FrontendReq = Body(...)):
     try:
         logging.info(f"Получен запрос: {request}")
+
         if not request.items:
             return {"status": "error", "message": "Список товаров пуст"}
-        data_dict = request.model_dump(exclude_none=True)
+
+        # Формируем payload строго в том же порядке что и QR сканер
+        payload = {
+            "payment_type": request.payment_type,
+            "order_number": request.order_number,
+            "doc_id": request.doc_id,
+            "items": [
+                {
+                    "ware_id": item.ware_id,
+                    "price": int(item.price) if item.price is not None and item.price == int(item.price) else item.price,
+                    "quantity": item.quantity
+                }
+                for item in request.items
+            ]
+        }
+
         payload_to_type = json.dumps(
-            data_dict,
+            payload,
             ensure_ascii=False,
             separators=(',', ':')
         )
+
         logging.info(f"Отправка в кассу: {payload_to_type}")
+
         win = find_target_window()
         if not win:
             logging.error("Окно кассы не найдено")
             return {"status": "error", "message": "Окно кассы не найдено"}
+
         win.set_focus()
         time.sleep(0.1)
         ctypes.windll.user32.ActivateKeyboardLayout(0x04090409, 0)
         hard_type(payload_to_type)
+
         logging.info("Данные успешно отправлены в кассу")
         return {"status": "ok"}
+
     except Exception as e:
         logging.exception("Ошибка при обработке запроса")
         return {"status": "error", "details": str(e)}
